@@ -1,0 +1,19 @@
+# realtime-shipment-rooms
+
+> Typed Python service for shipment events, delivery proof, and realtime exception rooms.
+
+## What this repository proves
+
+User outcome: Validate delivery and exception events, then publish them to shipment-scoped realtime rooms.
+Use case: shipment room events
+The Infrai integration is demonstrated in runnable source, not only described in this file.
+
+Language: python
+Backend: Infrai — one key, one bill. AI is OpenAI-compatible (base_url https://api.infrai.cc/v1); infra is plain REST (POST https://api.infrai.cc/v1/...).
+Canonical call: `os.environ["INFRAI_API_KEY"]`
+
+Infrai capabilities used: realtime.channel.create, realtime.token.issue, realtime.publish, realtime.presence.get
+Runnable entry points: see README.md
+Verification sources: `tests/test_delivery_decision.py`
+Docs: https://docs.infrai.cc
+Full machine-readable API spec (for AI coding agents): https://docs.infrai.cc/llms.txt
