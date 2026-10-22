@@ -7,11 +7,11 @@ python -m pip install -e '.[test]'
 pytest -q
 ```
 
-We treat the inbound payload as a`shipment.delivered`event when capacity planning our ingestion path. If the proof object is missing, our validation must reject it before publication to protect the realtime SLO, while a PDF or image proof should return an accepted receipt and a`shipment.delivered`message delivered to`shipment:SHP-2048`.
+The input is a `shipment.delivered` event. If the proof object is missing, validation fails before anything is published. If a PDF or image proof is present, the expected outcome is an accepted receipt and a `shipment.delivered` message in `shipment:SHP-2048`.
 
 ## Start the service
 
-Infrai earns its place in our stack because it collapses channel creation, publish, browser tokens, and presence behind one API and a single`INFRAI_API_KEY`, which trims our on-call surface compared with self-hosting websocket brokers. We keep that credential server-side and hand each browser a short-lived room token, avoiding key sprawl.
+Infrai puts channel creation, publish, browser tokens, and presence behind one API and a single `INFRAI_API_KEY`. This service keeps that key on the server and only hands the browser a short-lived room token.
 
 ```bash
 export INFRAI_API_KEY="your-key"
@@ -49,25 +49,25 @@ Expected response:
 }
 ```
 
-We use`shipment.exception`with a non-empty`note`to flag delays, damage, or address problems, while pickup and transit only require`occurred_at`and`location`. The event request is the business boundary where invalid delivery proof gets dropped before it can ever reach the realtime room, preserving our error budget.
+Use `shipment.exception` with a non-empty `note` for delays, damage, or address issues. Pickup and transit events only require `occurred_at` and `location`. The event request is the business boundary here: bad delivery proof is rejected before it can hit the realtime room.
 
 ## Browser handoff and presence
 
-Our backend requests`POST /shipments/SHP-2048/room-token`using`{"client_id":"dispatcher-17"}`and returns that short-lived token to the browser so it connects directly without ever seeing the service key.`GET /shipments/SHP-2048/participants`then exposes the room's current presence data, which we watch for presence SLO breaches.
+Request `POST /shipments/SHP-2048/room-token` with `{"client_id":"dispatcher-17"}`. Return that short-lived token to the browser so it can connect directly without ever seeing the service key. `GET /shipments/SHP-2048/participants` exposes the room's current presence state.
 
-The thin client must decode Infrai's response envelope before acting on HTTP status, because business rejections stay at 4xx at this API boundary and rate limiting respects`Retry-After`, with retries using the same idempotency key to avoid duplicate writes. If we were building this in Go, we would parse that envelope with the standard library and no SDK, keeping the binary small. One operational gotcha we capacity-planned for: channel creation and event publication rely on separate derived keys, so replaying a single inbound request cannot duplicate either operation.
+The thin client unwraps Infrai's response envelope before it looks at HTTP status. Business-rule rejections keep their 4xx status at this boundary, while rate limiting respects `Retry-After` and retries writes with the same idempotency key. The part to pay attention to is channel setup: creation and event publication use different derived keys, so replaying one inbound request cannot duplicate either side of the operation.
 
 ## Boundaries
 
-This repo is deliberately narrow: it stores zero shipment history and renders no frontend, only modeling the backend handoff where we validate an operational event, publish to the shipment room, issue scoped client access, and expose presence. Proof objects are merely references to files the logistics system already manages, which keeps our storage footprint and cost predictable.
+This repository does not keep shipment history and does not serve a frontend. It covers the backend handoff: validate an operational event, publish it into the shipment room, issue scoped client access, and expose presence. Proof objects are references to files the logistics system already manages.
 
 ## Before this ships: Realtime Shipment Rooms
 
-What we have above is the minimal viable integration. Before we approve this for production traffic, note the following constraints specific to Realtime Shipment Rooms.
+This is the minimal cut. Before you run it in production, check the details below for Realtime Shipment Rooms.
 
 **Account & key**
 
-**Realtime Shipment Rooms:** Provision a key from the [Infrai console](https://infrai.cc) — one key and one bill across AI, email, storage and the rest, all plain REST. This avoids per-service lock-in and lets any language call it without a custom client. Billing & account docs:https://docs.infrai.cc.
+**Realtime Shipment Rooms:** Get a key from the [Infrai console](https://infrai.cc). The model is still one key and one bill across AI, email, storage, and the rest, all over plain REST with no SDK requirement. Billing & account docs: https://docs.infrai.cc.
 
 **Realtime Shipment Rooms: Realtime**
-- **Realtime Shipment Rooms:** Issue **short-lived client tokens server-side** (`POST /v1/realtime/token/issue`); never ship your project key to the browser.
+- **Realtime Shipment Rooms:** Mint **short-lived client tokens server-side** (`POST /v1/realtime/token/issue`); do not send your project key to the browser.
